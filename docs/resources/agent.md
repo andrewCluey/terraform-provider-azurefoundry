@@ -49,7 +49,7 @@ resource "azurefoundry_vector_store" "knowledge" {
 }
 
 resource "azurefoundry_agent" "researcher" {
-  model        = "gpt-4o"
+  model        = "gpt-4o" # the model deployment (cognitive deployment) must already exist in the foundry project
   name         = "research-assistant"
   instructions = "Answer questions using the knowledge base."
 
@@ -65,7 +65,7 @@ resource "azurefoundry_agent" "researcher" {
 
 ### Required
 
-- `model` (String) - The model deployment name (e.g. `gpt-4o`, `gpt-4o-mini`).
+- `model` (String) - The model deployment name (e.g. `gpt-4o`, `gpt-4o-mini`). This deployment must already exist in the Foundry project before you deploy.
 
 ### Optional
 

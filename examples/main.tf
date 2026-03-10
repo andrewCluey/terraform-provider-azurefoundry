@@ -2,13 +2,13 @@ terraform {
   required_providers {
     azurefoundry = {
       source = "andrewCluey/azurefoundry"
-      version = "0.1.0"
+      version = "0.1.1"
     }
   }
 }
 
 provider "azurefoundry" {
-  project_endpoint = "https://andrew-5649-resource.services.ai.azure.com/api/projects/andrew-5649"
+  project_endpoint = "https://andrew-7760-resource.services.ai.azure.com/api/projects/andrew-7760"
   use_azure_cli    = true
 }
 
@@ -47,8 +47,8 @@ resource "azurefoundry_vector_store" "knowledge" {
 
 # Step 3: Create an agent with file_search pointing at the vector store
 resource "azurefoundry_agent" "researcher" {
-  model        = "gpt-4.1"
-  name         = "dev-assistant"
+  model        = "4.1-nano"
+  name         = "dev-41"
   instructions = "You are a dev assistant. Use the file search tool to answer questions from the knowledge base."
   temperature = 0.5
   tools {
