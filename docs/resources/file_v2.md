@@ -25,12 +25,12 @@ Terraform will delete the old file and upload a new one (replace).
 ## Example Usage
 
 ```hcl
-resource "azurefoundry_file" "knowledge" {
+resource "azurefoundry_file_v2" "knowledge" {
   source = "./docs/knowledge.pdf"
 }
 
 output "file_id" {
-  value = azurefoundry_file.knowledge.id
+  value = azurefoundry_file_v2.knowledge.id
 }
 ```
 

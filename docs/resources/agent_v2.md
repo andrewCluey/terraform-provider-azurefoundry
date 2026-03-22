@@ -23,13 +23,13 @@ resource "azurefoundry_agent_v2" "example" {
 ### Agent with file search
 
 ```hcl
-resource "azurefoundry_file" "knowledge" {
+resource "azurefoundry_file_v2" "knowledge" {
   source = "./knowledge.pdf"
 }
 
-resource "azurefoundry_vector_store" "knowledge" {
+resource "azurefoundry_vector_store_v2" "knowledge" {
   name     = "knowledge-base"
-  file_ids = [azurefoundry_file.knowledge.id]
+  file_ids = [azurefoundry_file_v2.knowledge.id]
 }
 
 resource "azurefoundry_agent_v2" "researcher" {
