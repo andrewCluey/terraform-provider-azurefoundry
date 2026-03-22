@@ -120,6 +120,59 @@ type DeleteAgentResponse struct {
 	Deleted bool   `json:"deleted"`
 }
 
+// v2 - new API
+type AgentDefinitionV2 struct {
+    Kind         string `json:"kind"`
+    Model        string `json:"model,omitempty"`
+    Instructions string `json:"instructions,omitempty"`
+	Tools        []interface{} `json:"tools,omitempty"`
+}
+
+type AgentVersionV2 struct {
+    Object      string            `json:"object"`
+    ID          string            `json:"id"`
+    Name        string            `json:"name"`
+    Version     string            `json:"version"`
+    Description string            `json:"description"`
+    CreatedAt   int64             `json:"created_at"`
+    Metadata    map[string]string `json:"metadata"`
+    Definition  AgentDefinitionV2 `json:"definition"`
+}
+
+type AgentResponseV2 struct {
+    Object   string `json:"object"`
+    ID       string `json:"id"`
+    Name     string `json:"name"`
+    Versions struct {
+        Latest AgentVersionV2 `json:"latest"`
+    } `json:"versions"`
+}
+
+type CreateAgentV2Request struct {
+    Name        string            `json:"name"`
+    Description string            `json:"description,omitempty"`
+    Metadata    map[string]string `json:"metadata,omitempty"`
+    Definition  AgentDefinitionV2 `json:"definition"`
+}
+
+type UpdateAgentV2Request struct {
+    Description string            `json:"description,omitempty"`
+    Metadata    map[string]string `json:"metadata,omitempty"`
+    Definition  AgentDefinitionV2 `json:"definition"`
+}
+
+type DeleteAgentV2Response struct {
+    Object  string `json:"object"`
+    Name    string `json:"name"`
+    Deleted bool   `json:"deleted"`
+}
+
+type FileSearchToolV2 struct {
+    Type           string   `json:"type"`
+    VectorStoreIDs []string `json:"vector_store_ids,omitempty"`
+    MaxNumResults  int      `json:"max_num_results,omitempty"`
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // File model types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -205,6 +258,8 @@ type DeleteVectorStoreResponse struct {
 // Agent CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
+
+// classic foundry hub API
 func (c *FoundryClient) CreateAgent(ctx context.Context, req CreateAgentRequest) (*AgentResponse, error) {
 	url := fmt.Sprintf("%s/assistants?api-version=%s", c.ProjectEndpoint, APIVersion)
 	return c.doAgentRequest(ctx, http.MethodPost, url, req)
@@ -239,6 +294,43 @@ func (c *FoundryClient) DeleteAgent(ctx context.Context, agentID string) (*Delet
 		return nil, fmt.Errorf("decoding delete agent response: %w", err)
 	}
 	return &result, nil
+}
+
+// new CRUD functions, pointing at the newer /agents Microsoft Foundry API
+func (c *FoundryClient) CreateAgentV2(ctx context.Context, req CreateAgentV2Request) (*AgentResponseV2, error) {
+    url := fmt.Sprintf("%s/agents?api-version=v1", c.ProjectEndpoint)
+    return c.doAgentV2Request(ctx, http.MethodPost, url, req)
+}
+
+func (c *FoundryClient) GetAgentV2(ctx context.Context, name string) (*AgentResponseV2, error) {
+    url := fmt.Sprintf("%s/agents/%s?api-version=v1", c.ProjectEndpoint, name)
+    return c.doAgentV2Request(ctx, http.MethodGet, url, nil)
+}
+
+func (c *FoundryClient) UpdateAgentV2(ctx context.Context, name string, req UpdateAgentV2Request) (*AgentResponseV2, error) {
+    url := fmt.Sprintf("%s/agents/%s?api-version=v1", c.ProjectEndpoint, name)
+    return c.doAgentV2Request(ctx, http.MethodPost, url, req)
+}
+
+func (c *FoundryClient) DeleteAgentV2(ctx context.Context, name string) (*DeleteAgentV2Response, error) {
+    url := fmt.Sprintf("%s/agents/%s?api-version=v1", c.ProjectEndpoint, name)
+    httpReq, err := c.newRequest(ctx, http.MethodDelete, url, nil)
+    if err != nil {
+        return nil, err
+    }
+    resp, err := c.httpClient.Do(httpReq)
+    if err != nil {
+        return nil, fmt.Errorf("delete agent v2 HTTP error: %w", err)
+    }
+    defer resp.Body.Close()
+    if err := checkResponseError(resp); err != nil {
+        return nil, err
+    }
+    var result DeleteAgentV2Response
+    if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+        return nil, fmt.Errorf("decoding delete agent v2 response: %w", err)
+    }
+    return &result, nil
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -330,6 +422,92 @@ func (c *FoundryClient) DeleteFile(ctx context.Context, fileID string) (*DeleteF
 	return &result, nil
 }
 
+// v2
+func (c *FoundryClient) UploadFileV2(ctx context.Context, filename string, fileData []byte, purpose FilePurpose) (*FileResponse, error) {
+    url := fmt.Sprintf("%s/files?api-version=v1", c.ProjectEndpoint)
+
+    var buf bytes.Buffer
+    mw := multipart.NewWriter(&buf)
+
+    if err := mw.WriteField("purpose", string(purpose)); err != nil {
+        return nil, fmt.Errorf("writing purpose field: %w", err)
+    }
+
+    part, err := mw.CreateFormFile("file", filepath.Base(filename))
+    if err != nil {
+        return nil, fmt.Errorf("creating form file: %w", err)
+    }
+    if _, err := part.Write(fileData); err != nil {
+        return nil, fmt.Errorf("writing file data: %w", err)
+    }
+    mw.Close()
+
+    httpReq, err := c.newRequestRaw(ctx, http.MethodPost, url, &buf, mw.FormDataContentType())
+    if err != nil {
+        return nil, err
+    }
+
+    resp, err := c.httpClient.Do(httpReq)
+    if err != nil {
+        return nil, fmt.Errorf("upload file v2 HTTP error: %w", err)
+    }
+    defer resp.Body.Close()
+
+    if err := checkResponseError(resp); err != nil {
+        return nil, err
+    }
+
+    var result FileResponse
+    if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+        return nil, fmt.Errorf("decoding upload file v2 response: %w", err)
+    }
+    return &result, nil
+}
+
+func (c *FoundryClient) GetFileV2(ctx context.Context, fileID string) (*FileResponse, error) {
+    url := fmt.Sprintf("%s/files/%s?api-version=v1", c.ProjectEndpoint, fileID)
+    httpReq, err := c.newRequest(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("get file HTTP error: %w", err)
+	}
+	defer resp.Body.Close()
+	if err := checkResponseError(resp); err != nil {
+		return nil, err
+	}
+	var result FileResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decoding get file response: %w", err)
+	}
+	return &result, nil
+}
+
+func (c *FoundryClient) DeleteFileV2(ctx context.Context, fileID string) (*DeleteFileResponse, error) {
+    url := fmt.Sprintf("%s/files/%s?api-version=v1", c.ProjectEndpoint, fileID)
+    httpReq, err := c.newRequest(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("delete file HTTP error: %w", err)
+	}
+	defer resp.Body.Close()
+	if err := checkResponseError(resp); err != nil {
+		return nil, err
+	}
+	var result DeleteFileResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decoding delete file response: %w", err)
+	}
+	return &result, nil
+}
+
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Vector store CRUD
 // ─────────────────────────────────────────────────────────────────────────────
@@ -390,6 +568,46 @@ func (c *FoundryClient) WaitForVectorStore(ctx context.Context, vectorStoreID st
 		}
 	}
 }
+
+//v2
+
+func (c *FoundryClient) CreateVectorStoreV2(ctx context.Context, req CreateVectorStoreRequest) (*VectorStoreResponse, error) {
+    url := fmt.Sprintf("%s/vector_stores?api-version=v1", c.ProjectEndpoint)
+    return c.doVectorStoreRequest(ctx, http.MethodPost, url, req)
+}
+
+func (c *FoundryClient) GetVectorStoreV2(ctx context.Context, vectorStoreID string) (*VectorStoreResponse, error) {
+    url := fmt.Sprintf("%s/vector_stores/%s?api-version=v1", c.ProjectEndpoint, vectorStoreID)
+    return c.doVectorStoreRequest(ctx, http.MethodGet, url, nil)
+}
+
+func (c *FoundryClient) UpdateVectorStoreV2(ctx context.Context, vectorStoreID string, req UpdateVectorStoreRequest) (*VectorStoreResponse, error) {
+    url := fmt.Sprintf("%s/vector_stores/%s?api-version=v1", c.ProjectEndpoint, vectorStoreID)
+    return c.doVectorStoreRequest(ctx, http.MethodPost, url, req)
+}
+
+func (c *FoundryClient) DeleteVectorStoreV2(ctx context.Context, vectorStoreID string) (*DeleteVectorStoreResponse, error) {
+    url := fmt.Sprintf("%s/vector_stores/%s?api-version=v1", c.ProjectEndpoint, vectorStoreID)
+	httpReq, err := c.newRequest(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("delete vector store HTTP error: %w", err)
+	}
+	defer resp.Body.Close()
+	if err := checkResponseError(resp); err != nil {
+		return nil, err
+	}
+	var result DeleteVectorStoreResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decoding delete vector store response: %w", err)
+	}
+	return &result, nil
+}
+
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal helpers
@@ -487,4 +705,25 @@ func checkResponseError(resp *http.Response) error {
 	}
 	body, _ := io.ReadAll(resp.Body)
 	return &APIError{StatusCode: resp.StatusCode, Body: string(body)}
+}
+
+// v2
+func (c *FoundryClient) doAgentV2Request(ctx context.Context, method, url string, body interface{}) (*AgentResponseV2, error) {
+    httpReq, err := c.newRequest(ctx, method, url, body)
+    if err != nil {
+        return nil, err
+    }
+    resp, err := c.httpClient.Do(httpReq)
+    if err != nil {
+        return nil, fmt.Errorf("agent v2 API HTTP error (%s %s): %w", method, url, err)
+    }
+    defer resp.Body.Close()
+    if err := checkResponseError(resp); err != nil {
+        return nil, err
+    }
+    var result AgentResponseV2
+    if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+        return nil, fmt.Errorf("decoding agent v2 response: %w", err)
+    }
+    return &result, nil
 }
