@@ -31,9 +31,11 @@ provider_installation {
 }
 ```
 
-Replace `/Users/andrew/go/bin` with the output of `go env GOBIN` (or `go env GOPATH` + `/bin` if GOBIN is empty).
+Where `/Users/andrew/go/bin` is the output of `go env GOBIN` (or `go env GOPATH` + `/bin` if GOBIN is empty).
 
 ### 4. Use the provider
+
+from root of the provider project, run `go install ./...`
 
 From the `examples/` folder:
 
@@ -78,6 +80,14 @@ provider "azurefoundry" {
 ### azurefoundry_agent
 
 ```hcl
+terraform {
+  required_providers {
+    azurefoundry = {
+      source = "local/azurefoundry"
+    }
+  }
+}
+
 resource "azurefoundry_agent" "example" {
   model        = "gpt-4o"
   name         = "my-agent"
